@@ -20,7 +20,7 @@ You need to tell Claude Code to execute this script. Add the following to your p
         "hooks": [
           {
             "type": "command",
-            "command": "python3 claude_monitor.py"
+            "command": "python3 clawditor.py"
           }
         ]
       }
@@ -31,7 +31,7 @@ You need to tell Claude Code to execute this script. Add the following to your p
         "hooks": [
           {
             "type": "command",
-            "command": "python3 claude_monitor.py"
+            "command": "python3 clawditor.py"
           }
         ]
       }
