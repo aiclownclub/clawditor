@@ -17,23 +17,25 @@ You need to tell Claude Code to execute this script. Add the following to your p
     "PostToolUse": [
       {
         "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 clawditor.py"
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "python3 clawditor.py" }]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [{ "type": "command", "command": "python3 clawditor.py" }]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "*",
+        "hooks": [{ "type": "command", "command": "python3 clawditor.py" }]
       }
     ],
     "SessionEnd": [
       {
         "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 clawditor.py"
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "python3 clawditor.py" }]
       }
     ]
   }
