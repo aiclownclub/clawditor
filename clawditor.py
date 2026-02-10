@@ -3,66 +3,77 @@ import json
 import os
 from datetime import datetime
 
-# Path for persistent state and the final log
+# February 2026 Sonnet 4.5 Pricing (per 1M tokens)
+PRICING = {
+    "input": 3.00,
+    "output": 15.00
+}
+
 STATE_FILE = ".claude/build_monitor_state.json"
-LOG_FILE = "claude_performance_audit.log"
+LOG_FILE = "clawditor_audit.log"
 
 def load_state():
     if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, 'r') as f:
+        with open(STATE_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
-    return {"running_tokens": 0, "build_count": 0, "last_status": "passing"}
+    return {"in_tokens": 0, "out_tokens": 0, "build_count": 0, "last_status": "passing"}
 
 def save_state(state):
-    with open(STATE_FILE, 'w') as f:
+    os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+    with open(STATE_FILE, 'w', encoding='utf-8') as f:
         json.dump(state, f)
 
-def log_event(trigger, tokens, builds):
-    timestamp = datetime.now().isoformat()
-    entry = (f"[{timestamp}] TRIGGER: {trigger} | "
-             f"TOKENS: {tokens} | BUILDS: {builds}\n")
-    with open(LOG_FILE, 'a') as f:
+def calculate_cost(in_t, out_t):
+    return (in_t / 1_000_000 * PRICING["input"]) + (out_t / 1_000_000 * PRICING["output"])
+
+def log_event(trigger, in_t, out_t, builds):
+    cost = calculate_cost(in_t, out_t)
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # The "Shame Report" Format
+    entry = (f"[{timestamp}] {trigger.upper()}\n"
+             f" ├─ Total Tokens: {in_t + out_t:,} (In: {in_t:,} / Out: {out_t:,})\n"
+             f" ├─ Build Attempts: {builds}\n"
+             f" └─ Estimated Cost: ${cost:.4f}\n"
+             f"{'-'*50}\n")
+    
+    with open(LOG_FILE, 'a', encoding='utf-8') as f:
         f.write(entry)
 
 def main():
-    # Claude Code passes event data via stdin
     try:
         hook_data = json.load(sys.stdin)
-    except EOFError:
+    except (EOFError, json.JSONDecodeError):
         return
 
     event = hook_data.get("hook_event_name")
     state = load_state()
 
-    # 1. Track Token Usage (Extracted from hook metadata)
-    # Most hook payloads include 'usage' from the underlying API call
+    # Track Token Usage from API metadata
     usage = hook_data.get("usage", {})
-    state["running_tokens"] += usage.get("total_tokens", 0)
+    state["in_tokens"] += usage.get("input_tokens", 0)
+    state["out_tokens"] += usage.get("output_tokens", 0)
 
-    # 2. Handle Build Monitoring
     if event == "PostToolUse":
         tool_name = hook_data.get("tool_name")
         tool_input = hook_data.get("tool_input", "")
         
-        # Check if Claude tried to run a dotnet build
+        # Monitor .NET builds
         if tool_name == "Bash" and "dotnet build" in tool_input:
             state["build_count"] += 1
-            # Check exit code of the tool (0 = success, != 0 = failure)
             current_status = "passing" if hook_data.get("exit_code") == 0 else "failed"
 
-            # Check for Status Change: Failed -> Passing
             if state["last_status"] == "failed" and current_status == "passing":
-                log_event("Status Changed to Passing", state["running_tokens"], state["build_count"])
-                # Reset counters after success
-                state["running_tokens"] = 0
-                state["build_count"] = 0
+                log_event("Success Recovered", state["in_tokens"], state["out_tokens"], state["build_count"])
+                # Reset counters
+                state.update({"in_tokens": 0, "out_tokens": 0, "build_count": 0})
             
             state["last_status"] = current_status
 
-    # 3. Handle Session Termination
     elif event == "SessionEnd":
-        log_event("Session Terminated", state["running_tokens"], state["build_count"])
-        # Optional: Reset state for next session
+        if state["in_tokens"] + state["out_tokens"] > 0:
+            log_event("Session Terminated", state["in_tokens"], state["out_tokens"], state["build_count"])
+        
         if os.path.exists(STATE_FILE):
             os.remove(STATE_FILE)
         return
