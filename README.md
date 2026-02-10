@@ -1,7 +1,8 @@
 # Clawditor
 
-Because you must audit the Claude! 
+![Logo](./logo.png)
 
+Because you must audit the Claude! 
 
 ## Overview
 
